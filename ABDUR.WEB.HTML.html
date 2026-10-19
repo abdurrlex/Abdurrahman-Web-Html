@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abdurrahman - Micro:bit Web Bluetooth Controller & Telemetry</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        mono: {
+                            50: '#fafafa',
+                            100: '#f4f4f5',
+                            200: '#e4e4e7',
+                            300: '#d4d4d8',
+                            400: '#a1a1aa',
+                            500: '#71717a',
+                            600: '#52525b',
+                            700: '#3f3f46',
+                            800: '#27272a',
+                            900: '#18181b',
+                            950: '#09090b',
+                            black: '#000000',
+                            white: '#ffffff'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Google Fonts & Font Awesome Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Teachable Machine / TensorFlow.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.3/dist/teachablemachine-image.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #09090b;
+            color: #f4f4f5;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Custom Modern Monochromatic Scrollbar */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #09090b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3f3f46;
+        }
+
+        /* Tactile Monochromatic 3D D-Pad Buttons */
+        .dpad-btn {
+            position: relative;
+            background: linear-gradient(145deg, #18181b, #09090b);
+            border: 1px solid #27272a;
+            box-shadow: 0 6px 0 #000000, 0 10px 20px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            transition: all 0.08s ease-out;
+            cursor: pointer;
+            outline: none;
+            touch-action: none;
+        }
+
+        .dpad-btn:hover {
+            border-color: #71717a;
+            box-shadow: 0 6px 0 #000000, 0 12px 25px rgba(255, 255, 255, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        }
+
+        .dpad-btn.active, .dpad-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #000000, 0 4px 10px rgba(255, 255, 255, 0.2), inset 0 2px 5px rgba(0, 0, 0, 0.8);
+            background: linear-gradient(145deg, #ffffff, #e4e4e7) !important;
+            border-color: #ffffff !important;
+            color: #000000 !important;
+        }
+
+        .dpad-center-btn {
+            background: linear-gradient(145deg, #27272a, #18181b);
+            border: 1px solid #3f3f46;
+            box-shadow: 0 4px 0 #000000, inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+        
+        .dpad-center-btn.active, .dpad-center-btn:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 #000000, inset 0 2px 5px rgba(0, 0, 0, 0.8);
+            background: linear-gradient(145deg, #ffffff, #d4d4d8) !important;
+            border-color: #ffffff !important;
+            color: #000000 !important;
+        }
+
+        /* Status Glow Effects */
+        .glow-pulse-white {
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+            animation: pulse-white 2s infinite;
+        }
+        @keyframes pulse-white {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(255, 255, 255, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+        }
+
+        /* Toast Animation */
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .animate-toast {
+            animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Micro:bit LED Matrix Pixel Styling */
+        .led-pixel {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            background-color: #18181b;
+            border: 1px solid #27272a;
+            transition: all 0.15s ease;
+        }
+        .led-pixel.on {
+            background-color: #ffffff;
+            border-color: #ffffff;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
+        }
+
+        /* Teachable Machine webcam canvas */
+        #webcam-container canvas {
+            border-radius: 12px;
+            border: 1px solid #27272a;
+            max-width: 100%;
+            background: #09090b;
+        }
+    </style>
+</head>
+<body class="bg-mono-950 text-mono-100 min-h-screen flex flex-col antialiased">
+
+    <!-- TOP HEADER BAR -->
+    <header class="h-16 bg-mono-900/90 backdrop-blur border-b border-mono-800 sticky top-0 z-50 px-4 lg:px-6 flex items-center justify-between shadow-xl">
+        <!-- Brand Name & Logo -->
+        <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-xl bg-mono-white text-mono-black flex items-center justify-center font-black text-lg shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+                <i class="fa-solid fa-microchip"></i>
+            </div>
+            <div>
+                <h1 class="font-extrabold text-lg tracking-wider text-mono-white uppercase">
+                    ABDURRAHMAN
+                </h1>
+                <p class="text-[10px] text-mono-400 font-mono tracking-widest hidden sm:block">Micro:bit Web Bluetooth Architecture</p>
+            </div>
+        </div>
+
+        <!-- Connection Status & Global Actions -->
+        <div class="flex items-center space-x-3 sm:space-x-4">
+            <!-- Bluetooth Connection Badge -->
+            <div id="statusBadge" class="flex items-center space-x-2 bg-mono-950 border border-mono-800 px-3 py-1.5 rounded-full text-xs font-medium">
+                <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-mono-600"></span>
+                <span id="statusText" class="text-mono-400 font-mono text-[11px]">Terputus</span>
+            </div>
+
+            <!-- Simulation Switch -->
+            <label class="hidden md:flex items-center space-x-2 text-xs text-mono-300 bg-mono-800/60 hover:bg-mono-800 px-3 py-1.5 rounded-xl border border-mono-700/60 cursor-pointer transition">
+                <input type="checkbox" id="simToggle" onchange="toggleSimulation(this.checked)" class="form-checkbox h-4 w-4 text-mono-white bg-mono-950 border-mono-700 rounded focus:ring-0">
+                <span class="font-medium text-[11px]"><i class="fa-solid fa-vial mr-1 text-mono-400"></i>Simulasi</span>
+            </label>
+
+            <!-- Connect / Disconnect Button -->
+            <button id="connectBtn" onclick="toggleBluetoothConnection()" class="flex items-center space-x-2 bg-mono-white hover:bg-mono-200 text-mono-black px-4 py-2 rounded-xl text-xs font-bold shadow-[0_0_15px_rgba(255,255,255,0.15)] active:scale-95 transition-all">
+                <i class="fa-bluetooth-b fab text-sm"></i>
+                <span id="connectBtnText">Hubungkan Micro:bit</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN APPLICATION WORKSPACE -->
+    <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+        
+        <!-- LEFT SIDEBAR NAVIGATION (2 Cols) -->
+        <aside class="lg:col-span-2 bg-mono-950 border-b lg:border-b-0 lg:border-r border-mono-800/80 p-3 lg:p-4 flex lg:flex-col justify-between shrink-0">
+            <nav class="flex lg:flex-col space-x-2 lg:space-x-0 lg:space-y-2 w-full">
+                <button id="navTabTelemetry" onclick="switchTab('telemetry')" class="nav-btn flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl font-semibold text-xs transition bg-mono-white text-mono-black border border-mono-white shadow-md">
+                    <i class="fa-solid fa-chart-line text-sm"></i>
+                    <span>Dasbor Telemetri</span>
+                </button>
+                <button id="navTabDpad" onclick="switchTab('dpad')" class="nav-btn flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl font-semibold text-xs transition text-mono-400 hover:bg-mono-900 hover:text-mono-100 border border-transparent">
+                    <i class="fa-solid fa-gamepad text-sm"></i>
+                    <span>D-Pad Controller</span>
+                </button>
+                <button id="navTabTeachable" onclick="switchTab('teachable')" class="nav-btn flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl font-semibold text-xs transition text-mono-400 hover:bg-mono-900 hover:text-mono-100 border border-transparent">
+                    <i class="fa-solid fa-robot text-sm"></i>
+                    <span>Teachable Machine</span>
+                </button>
+            </nav>
+
+            <!-- Sidebar Spec Info Footer -->
+            <div class="hidden lg:block bg-mono-900/60 border border-mono-800 rounded-xl p-3 text-[11px] space-y-2">
+                <div class="text-mono-300 font-bold tracking-wider uppercase text-[10px] pb-1 border-b border-mono-800">Spesifikasi UART</div>
+                <div class="flex justify-between text-mono-400 font-mono">
+                    <span>Svc UUID:</span>
+                    <span class="text-mono-200">...6e400001</span>
+                </div>
+                <div class="flex justify-between text-mono-400 font-mono">
+                    <span>TX UUID:</span>
+                    <span class="text-mono-200">...6e400002</span>
+                </div>
+                <div class="flex justify-between text-mono-400 font-mono">
+                    <span>RX UUID:</span>
+                    <span class="text-mono-200">...6e400003</span>
+                </div>
+                <div class="text-[10px] text-mono-500 pt-1 border-t border-mono-800/80">
+                    Sistem "Abdurrahman" Web Bluetooth.
+                </div>
+            </div>
+        </aside>
+
+        <!-- CENTER VIEWPORT (7 Cols on desktop) -->
+        <main class="lg:col-span-6 xl:col-span-7 overflow-y-auto p-4 sm:p-6 space-y-6">
+
+            <!-- ================= TAB 1: DASBOR TELEMETRI ================= -->
+            <section id="viewTelemetry" class="space-y-6">
+                <!-- Header -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-mono-800 pb-4">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-mono-white uppercase tracking-wide flex items-center gap-2">
+                            <i class="fa-solid fa-gauge text-mono-400"></i>
+                            Dasbor Telemetri Real-Time
+                        </h2>
+                        <p class="text-xs text-mono-400">Monitoring data sensor langsung dari board Micro:bit</p>
+                    </div>
+                    <button onclick="resetTelemetryData()" class="self-start sm:self-auto text-xs bg-mono-900 hover:bg-mono-800 border border-mono-700 px-3 py-1.5 rounded-xl text-mono-300 transition">
+                        <i class="fa-solid fa-rotate-left mr-1"></i> Reset Data
+                    </button>
+                </div>
+
+                <!-- Sensor Cards Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    
+                    <!-- Temp Card -->
+                    <div class="bg-mono-900/80 border border-mono-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+                        <div class="flex justify-between items-start">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-mono-400">Suhu (°C)</span>
+                            <span class="p-1.5 rounded-lg bg-mono-800 text-mono-200 text-xs"><i class="fa-solid fa-temperature-half"></i></span>
+                        </div>
+                        <div class="my-3">
+                            <div class="text-3xl font-black font-mono text-mono-white" id="valTemp">26.0 <span class="text-sm font-normal text-mono-400">°C</span></div>
+                            <div class="w-full bg-mono-950 rounded-full h-1.5 mt-2.5 overflow-hidden border border-mono-800">
+                                <div id="barTemp" class="bg-mono-white h-1.5 rounded-full transition-all duration-300" style="width: 52%;"></div>
+                            </div>
+                        </div>
+                        <div class="flex justify-between text-[10px] text-mono-500 font-mono">
+                            <span>Min: <span id="minTemp">24</span>°C</span>
+                            <span>Max: <span id="maxTemp">28</span>°C</span>
+                        </div>
+                    </div>
+
+                    <!-- Light Level Card -->
+                    <div class="bg-mono-900/80 border border-mono-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between">
+                        <div class="flex justify-between items-start">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-mono-400">Cahaya (0-255)</span>
+                            <span class="p-1.5 rounded-lg bg-mono-800 text-mono-200 text-xs"><i class="fa-solid fa-sun"></i></span>
+                        </div>
+                        <div class="my-3">
+                            <div class="text-3xl font-black font-mono text-mono-white" id="valLight">128 <span class="text-xs font-normal text-mono-400">/ 255</span></div>
+                            <div class="w-full bg-mono-950 rounded-full h-1.5 mt-2.5 overflow-hidden border border-mono-800">
+                                <div id="barLight" class="bg-mono-white h-1.5 rounded-full transition-all duration-300" style="width: 50%;"></div>
+                            </div>
+                        </div>
+                        <div class="text-[10px] text-mono-500 font-mono">
+                            Sensitivitas Ambient LED Matrix
+                        </div>
+                    </div>
+
+                    <!-- Buttons A & B Status -->
+                    <div class="bg-mono-900/80 border border-mono-800 rounded-2xl p-4 shadow-lg flex flex-col justify-between sm:col-span-2 lg:col-span-1">
+                        <div class="flex justify-between items-start">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-mono-400">Tombol Fisik</span>
+                            <span class="p-1.5 rounded-lg bg-mono-800 text-mono-200 text-xs"><i class="fa-solid fa-toggle-on"></i></span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 my-2">
+                            <div class="bg-mono-950 p-2 rounded-xl border border-mono-800 text-center">
+                                <span class="text-[9px] text-mono-400 font-bold block mb-1">TOMBOL A</span>
+                                <span id="btnAStatus" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-mono-800 text-mono-400">RELEASE</span>
+                            </div>
+                            <div class="bg-mono-950 p-2 rounded-xl border border-mono-800 text-center">
+                                <span class="text-[9px] text-mono-400 font-bold block mb-1">TOMBOL B</span>
+                                <span id="btnBStatus" class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-mono-800 text-mono-400">RELEASE</span>
+                            </div>
+                        </div>
+                        <div class="text-[10px] text-mono-500 font-mono text-center">
+                            Event OnPress / OnRelease
+                        </div>
+                    </div>
+
+                    <!-- Accelerometer Card -->
+                    <div class="bg-mono-900/80 border border-mono-800 rounded-2xl p-4 shadow-lg sm:col-span-2 lg:col-span-3">
+                        <div class="flex justify-between items-center mb-3">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-mono-400">Akselerometer 3-Axis (mg)</span>
+                            <span class="p-1.5 rounded-lg bg-mono-800 text-mono-200 text-xs"><i class="fa-solid fa-compass"></i></span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-3 mb-3">
+                            <div class="bg-mono-950 p-2.5 rounded-xl border border-mono-800 text-center">
+                                <span class="text-[9px] text-mono-400 font-bold block">AXIS X</span>
+                                <span id="valAccelX" class="text-base font-mono font-bold text-mono-white">0</span>
+                            </div>
+                            <div class="bg-mono-950 p-2.5 rounded-xl border border-mono-800 text-center">
+                                <span class="text-[9px] text-mono-400 font-bold block">AXIS Y</span>
+                                <span id="valAccelY" class="text-base font-mono font-bold text-mono-white">0</span>
+                            </div>
+                            <div class="bg-mono-950 p-2.5 rounded-xl border border-mono-800 text-center">
+                                <span class="text-[9px] text-mono-400 font-bold block">AXIS Z</span>
+                                <span id="valAccelZ" class="text-base font-mono font-bold text-mono-white">-1024</span>
+                            </div>
+                        </div>
+                        <!-- Tilt Visualizer Bubble -->
+                        <div class="w-full bg-mono-950 rounded-xl h-6 relative overflow-hidden border border-mono-800 flex items-center justify-center">
+                            <div class="absolute h-full w-0.5 bg-mono-800 left-1/2"></div>
+                            <div id="tiltBubble" class="w-4 h-4 rounded-full bg-mono-white shadow-[0_0_8px_rgba(255,255,255,0.8)] transition-all duration-150" style="transform: translate(0px, 0px);"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Serial Transmitter & LED Display Simulator Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- Serial Input Sender -->
+                    <div class="bg-mono-900/80 border border-mono-800 rounded-2xl p-5 shadow-lg space-y-4">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-terminal text-mono-300 text-xs"></i>
+                            <h3 class="text-xs font-bold text-mono-white uppercase tracking-wider">Kirim Teks UART Custom</h3>
+                        </div>
+                        <form onsubmit="sendCustomCommand(event)" class="flex gap-2">
+                            <input type="text" id="customCmdInput" placeholder="Ketik teks/perintah..." class="flex-1 bg-mono-950 border border-mono-800 rounded-xl px-3.5 py-2 text-xs text-mono-100 focus:outline-none focus:border-mono-white font-mono">
+                            <button type="submit" class="bg-mono-white hover:bg-mono-200 text-mono-black px-4 py-2 rounded-xl font-bold text-xs transition shadow active:scale-95">
+                                Kirim
+                            </button>
+                        </form>
+                        <p class="text-[10px] text-mono-500">Karakter newline (`\n`) otomatis ditambahkan di akhir string.</p>
+                    </div>
+
+                    <!-- Micro:bit 5x5 LED Matrix Simulator -->
+                    <div class="bg-mono-900/80 border border-mono-800 rounded-2xl p-5 shadow-lg flex items-center justify-between">
+                        <div class="space-y-2">
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-solid fa-border-all text-mono-300 text-xs"></i>
+                                <h3 class="text-xs font-bold text-mono-white uppercase tracking-wider">Display 5x5 Matrix</h3>
+                            </div>
+                            <div class="flex flex-wrap gap-1.5 pt-1">
+                                <button onclick="triggerMatrixPreset('SMILE')" class="bg-mono-950 hover:bg-mono-800 border border-mono-800 text-[10px] px-2.5 py-1 rounded-lg transition font-mono">Smile</button>
+                                <button onclick="triggerMatrixPreset('HEART')" class="bg-mono-950 hover:bg-mono-800 border border-mono-800 text-[10px] px-2.5 py-1 rounded-lg transition font-mono">Heart</button>
+                                <button onclick="triggerMatrixPreset('CLEAR')" class="bg-mono-950 hover:bg-mono-800 border border-mono-800 text-[10px] px-2.5 py-1 rounded-lg transition font-mono">Clear</button>
+                            </div>
+                        </div>
+
+                        <!-- 5x5 LED Grid View -->
+                        <div id="ledMatrixDisplay" class="grid grid-cols-5 gap-1.5 bg-mono-950 p-2.5 rounded-xl border border-mono-800">
+                            <!-- 25 LEDs generated dynamically -->
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- ================= TAB 2: D-PAD CONTROLLER ================= -->
+            <section id="viewDpad" class="space-y-6 hidden">
+                
+                <!-- Section Header -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-mono-800 pb-4">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-mono-white uppercase tracking-wide flex items-center gap-2">
+                            <i class="fa-solid fa-gamepad text-mono-400"></i>
+                            D-Pad Tactile Controller
+                        </h2>
+                        <p class="text-xs text-mono-400">
+                            Pointer Capture Strict Pressing. <strong>Mouse Hover = 0 Signal.</strong>
+                        </p>
+                    </div>
+
+                    <!-- Signal Status Indicator -->
+                    <div class="bg-mono-900 border border-mono-800 px-3.5 py-1.5 rounded-xl flex items-center space-x-2 self-start sm:self-auto">
+                        <span class="text-[10px] text-mono-400 uppercase font-bold">UART State:</span>
+                        <span id="activeSignalDisplay" class="font-mono text-xs font-bold text-mono-400 bg-mono-950 px-2.5 py-0.5 rounded-lg border border-mono-800">
+                            IDLE (stop)
+                        </span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    
+                    <!-- Tactile D-Pad Center Box -->
+                    <div class="lg:col-span-7 bg-mono-900/60 border border-mono-800 rounded-3xl p-6 flex flex-col items-center justify-center shadow-2xl relative min-h-[350px]">
+                        
+                        <div class="relative w-64 h-64 sm:w-72 sm:h-72 my-2 select-none">
+                            
+                            <!-- D-PAD UP -->
+                            <button id="btnDpadUp"
+                                    onpointerdown="handleDpadPointerDown(event, 'up')"
+                                    onpointerup="handleDpadPointerUp(event, 'up')"
+                                    onpointercancel="handleDpadPointerCancel(event, 'up')"
+                                    class="dpad-btn absolute top-0 left-1/2 -translate-x-1/2 w-20 h-24 sm:w-24 sm:h-28 rounded-t-2xl flex flex-col items-center pt-3 text-mono-200">
+                                <i class="fa-solid fa-chevron-up text-2xl mb-1"></i>
+                                <span class="text-[9px] font-bold font-mono text-mono-400">UP</span>
+                            </button>
+
+                            <!-- D-PAD LEFT -->
+                            <button id="btnDpadLeft"
+                                    onpointerdown="handleDpadPointerDown(event, 'left')"
+                                    onpointerup="handleDpadPointerUp(event, 'left')"
+                                    onpointercancel="handleDpadPointerCancel(event, 'left')"
+                                    class="dpad-btn absolute left-0 top-1/2 -translate-y-1/2 h-20 w-24 sm:h-24 sm:w-28 rounded-l-2xl flex items-center pl-3 text-mono-200">
+                                <i class="fa-solid fa-chevron-left text-2xl mr-2"></i>
+                                <span class="text-[9px] font-bold font-mono text-mono-400">LEFT</span>
+                            </button>
+
+                            <!-- D-PAD CENTER (STOP) -->
+                            <button id="btnDpadCenter"
+                                    onpointerdown="handleDpadPointerDown(event, 'stop')"
+                                    onpointerup="handleDpadPointerUp(event, 'stop')"
+                                    onpointercancel="handleDpadPointerCancel(event, 'stop')"
+                                    class="dpad-center-btn absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-20 h-20 sm:w-24 sm:h-24 rounded-2xl flex flex-col items-center justify-center text-mono-white">
+                                <i class="fa-solid fa-hand text-lg mb-0.5"></i>
+                                <span class="text-[9px] font-bold font-mono tracking-wider">STOP</span>
+                            </button>
+
+                            <!-- D-PAD RIGHT -->
+                            <button id="btnDpadRight"
+                                    onpointerdown="handleDpadPointerDown(event, 'right')"
+                                    onpointerup="handleDpadPointerUp(event, 'right')"
+                                    onpointercancel="handleDpadPointerCancel(event, 'right')"
+                                    class="dpad-btn absolute right-0 top-1/2 -translate-y-1/2 h-20 w-24 sm:h-24 sm:w-28 rounded-r-2xl flex items-center justify-end pr-3 text-mono-200">
+                                <span class="text-[9px] font-bold font-mono text-mono-400">RIGHT</span>
+                                <i class="fa-solid fa-chevron-right text-2xl ml-2"></i>
+                            </button>
+
+                            <!-- D-PAD DOWN -->
+                            <button id="btnDpadDown"
+                                    onpointerdown="handleDpadPointerDown(event, 'down')"
+                                    onpointerup="handleDpadPointerUp(event, 'down')"
+                                    onpointercancel="handleDpadPointerCancel(event, 'down')"
+                                    class="dpad-btn absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-24 sm:w-24 sm:h-28 rounded-b-2xl flex flex-col items-center justify-end pb-3 text-mono-200">
+                                <span class="text-[9px] font-bold font-mono text-mono-400 mb-1">DOWN</span>
+                                <i class="fa-solid fa-chevron-down text-2xl"></i>
+                            </button>
+                        </div>
+
+                        <div class="mt-3 text-center">
+                            <p class="text-[11px] text-mono-400">
+                                Hover mouse tanpa klik <strong>tidak akan</strong> mengirim sinyal.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Aux Control Action Presets -->
+                    <div class="lg:col-span-5 space-y-4">
+                        <div class="bg-mono-900/80 border border-mono-800 rounded-2xl p-4 shadow-lg space-y-3">
+                            <h3 class="text-xs font-bold text-mono-white uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-sliders text-mono-400"></i>
+                                Tombol Aksi Tambahan
+                            </h3>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="sendDirectUART('btn_a')" class="bg-mono-950 hover:bg-mono-800 active:scale-95 border border-mono-800 text-mono-100 font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center space-x-2 transition">
+                                    <span class="w-5 h-5 rounded-full bg-mono-800 text-mono-white flex items-center justify-center text-[10px] font-bold">A</span>
+                                    <span>Sinyal 'btn_a'</span>
+                                </button>
+                                <button onclick="sendDirectUART('btn_b')" class="bg-mono-950 hover:bg-mono-800 active:scale-95 border border-mono-800 text-mono-100 font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center space-x-2 transition">
+                                    <span class="w-5 h-5 rounded-full bg-mono-800 text-mono-white flex items-center justify-center text-[10px] font-bold">B</span>
+                                    <span>Sinyal 'btn_b'</span>
+                                </button>
+                                <button onclick="sendDirectUART('horn')" class="bg-mono-950 hover:bg-mono-800 active:scale-95 border border-mono-800 text-mono-100 font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center space-x-2 transition">
+                                    <i class="fa-solid fa-bullhorn text-mono-400"></i>
+                                    <span>Klakson ('horn')</span>
+                                </button>
+                                <button onclick="sendDirectUART('light_on')" class="bg-mono-950 hover:bg-mono-800 active:scale-95 border border-mono-800 text-mono-100 font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center space-x-2 transition">
+                                    <i class="fa-solid fa-lightbulb text-mono-400"></i>
+                                    <span>Lampu ('light_on')</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Speed Regulator -->
+                        <div class="bg-mono-900/80 border border-mono-800 rounded-2xl p-4 shadow-lg space-y-2">
+                            <div class="flex justify-between items-center">
+                                <label class="text-xs font-bold text-mono-white uppercase tracking-wider">Regulator Kecepatan</label>
+                                <span id="speedValText" class="text-xs font-mono font-bold text-mono-white">75%</span>
+                            </div>
+                            <input type="range" min="20" max="100" value="75" id="speedRange" oninput="updateSpeed(this.value)" class="w-full h-1.5 bg-mono-950 rounded-lg appearance-none cursor-pointer accent-mono-white">
+                        </div>
+
+                        <!-- Keyboard Shortcut Reference -->
+                        <div class="bg-mono-900/80 border border-mono-800 rounded-2xl p-4 shadow-lg space-y-2">
+                            <h3 class="text-xs font-bold text-mono-white uppercase tracking-wider">Keyboard (WASD / Panah)</h3>
+                            <div class="grid grid-cols-2 gap-2 text-[11px] text-mono-400">
+                                <div class="bg-mono-950 p-2 rounded-lg border border-mono-800 flex justify-between items-center">
+                                    <span>Atas:</span>
+                                    <kbd class="bg-mono-800 text-mono-white font-mono px-2 py-0.5 rounded border border-mono-700">W / ▲</kbd>
+                                </div>
+                                <div class="bg-mono-950 p-2 rounded-lg border border-mono-800 flex justify-between items-center">
+                                    <span>Bawah:</span>
+                                    <kbd class="bg-mono-800 text-mono-white font-mono px-2 py-0.5 rounded border border-mono-700">S / ▼</kbd>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </section>
+
+            <!-- ================= TAB 3: TEACHABLE MACHINE ================= -->
+            <section id="viewTeachable" class="space-y-6 hidden">
+                
+                <!-- Section Header -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-mono-800 pb-4">
+                    <div>
+                        <h2 class="text-lg font-extrabold text-mono-white uppercase tracking-wide flex items-center gap-2">
+                            <i class="fa-solid fa-robot text-mono-400"></i>
+                            Teachable Machine Controller
+                        </h2>
+                        <p class="text-xs text-mono-400">
+                            Load model → kamera aktif → kirim class ke Micro:bit (hanya jika confidence ≥ 85%)
+                        </p>
+                    </div>
+                    <div class="bg-mono-900 border border-mono-800 px-3.5 py-1.5 rounded-xl flex items-center space-x-2 self-start sm:self-auto">
+                        <span class="text-[10px] text-mono-400 uppercase font-bold">Last Sent:</span>
+                        <span id="tmLastSentDisplay" class="font-mono text-xs font-bold text-mono-400 bg-mono-950 px-2.5 py-0.5 rounded-lg border border-mono-800">
+                            —
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Model URL Input -->
+                <div class="bg-mono-900/80 border border-mono-800 rounded-2xl p-5 shadow-lg space-y-4">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-link text-mono-300 text-xs"></i>
+                        <h3 class="text-xs font-bold text-mono-white uppercase tracking-wider">Link Model Teachable Machine</h3>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input type="text" id="tmModelUrl" 
+                               placeholder="https://teachablemachine.withgoogle.com/models/XXXX/" 
+                               class="flex-1 bg-mono-950 border border-mono-800 rounded-xl px-3.5 py-2.5 text-xs text-mono-100 focus:outline-none focus:border-mono-white font-mono">
+                        <button id="tmLoadBtn" onclick="startTeachableMachine()" 
+                                class="bg-mono-white hover:bg-mono-200 text-mono-black px-5 py-2.5 rounded-xl font-bold text-xs transition shadow active:scale-95 flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-play"></i>
+                            <span>Load & Start</span>
+                        </button>
+                        <button id="tmStopBtn" onclick="stopTeachableMachine()" disabled
+                                class="bg-mono-800 hover:bg-mono-700 text-mono-300 px-4 py-2.5 rounded-xl font-bold text-xs transition border border-mono-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                            <i class="fa-solid fa-stop"></i>
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-mono-500">
+                        Paste link export dari Teachable Machine (Image Project). Contoh: <code class="text-mono-400">https://teachablemachine.withgoogle.com/models/Jgyr546VH/</code>
+                    </p>
+                </div>
+
+                <!-- Webcam + Predictions Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    
+                    <!-- Webcam Preview -->
+                    <div class="bg-mono-900/80 border border-mono-800 rounded-2xl p-5 shadow-lg space-y-3">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <i class="fa-solid fa-video text-mono-300 text-xs"></i>
+                                <h3 class="text-xs font-bold text-mono-white uppercase tracking-wider">Kamera Live</h3>
+                            </div>
+                            <span id="tmStatusBadge" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-mono-950 border border-mono-800 text-mono-500">Idle</span>
+                        </div>
+                        <div id="webcam-container" class="flex items-center justify-center min-h-[220px] bg-mono-950 rounded-xl border border-mono-800 overflow-hidden">
+                            <div id="tmPlaceholder" class="text-center text-mono-600 text-xs py-10">
+                                <i class="fa-solid fa-camera text-2xl mb-2 opacity-40"></i>
+                                <p>Kamera akan muncul setelah model dimuat</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Predictions -->
+                    <div class="bg-mono-900/80 border border-mono-800 rounded-2xl p-5 shadow-lg space-y-3">
+                        <div class="flex items-center space-x-2">
+                            <i class="fa-solid fa-chart-bar text-mono-300 text-xs"></i>
+                            <h3 class="text-xs font-bold text-mono-white uppercase tracking-wider">Prediksi Real-Time</h3>
+                        </div>
+                        <div id="tmLabelContainer" class="space-y-2 min-h-[180px]">
+                            <div class="text-mono-600 text-xs italic text-center py-8">Menunggu model...</div>
+                        </div>
+                        <div class="pt-2 border-t border-mono-800 flex items-center justify-between text-[10px] text-mono-500">
+                            <span>Threshold kirim: <strong class="text-mono-300">≥ 85%</strong></span>
+                            <span id="tmCurrentConf" class="font-mono">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Info Box -->
+                <div class="bg-mono-900/60 border border-mono-800 rounded-xl p-4 text-[11px] text-mono-400 space-y-1">
+                    <p><i class="fa-solid fa-circle-info mr-1 text-mono-300"></i> 
+                    Sistem hanya mengirim class baru ke Micro:bit jika confidence ≥ 85%. Jika di bawah 85%, data terakhir yang dikirim tetap dipertahankan (tidak diganti).</p>
+                    <p>Semua data yang dikirim otomatis masuk ke Activity History (filter TX).</p>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- RIGHT SIDEBAR: PERMANENT ACTIVITY HISTORY & LOG PANEL (3-4 Cols on desktop) -->
+        <aside class="lg:col-span-4 xl:col-span-3 bg-mono-950 border-t lg:border-t-0 lg:border-l border-mono-800/80 p-4 flex flex-col h-full overflow-hidden">
+            
+            <!-- Activity History Title Bar -->
+            <div class="flex items-center justify-between border-b border-mono-800 pb-3 mb-3 shrink-0">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-list-check text-mono-300 text-sm"></i>
+                    <h3 class="text-xs font-extrabold uppercase tracking-wider text-mono-white">Activity History</h3>
+                </div>
+                <span id="logCounterBadge" class="bg-mono-900 text-mono-400 text-[10px] font-mono px-2 py-0.5 rounded-full border border-mono-800">0 log</span>
+            </div>
+
+            <!-- Filter Tabs -->
+            <div class="flex rounded-xl bg-mono-900 p-1 border border-mono-800 text-[11px] mb-3 shrink-0">
+                <button onclick="setLogFilter('ALL')" id="filterBtnALL" class="flex-1 py-1 rounded-lg font-bold bg-mono-white text-mono-black transition">Semua</button>
+                <button onclick="setLogFilter('TX')" id="filterBtnTX" class="flex-1 py-1 rounded-lg text-mono-400 hover:text-mono-100 transition">TX</button>
+                <button onclick="setLogFilter('RX')" id="filterBtnRX" class="flex-1 py-1 rounded-lg text-mono-400 hover:text-mono-100 transition">RX</button>
+                <button onclick="setLogFilter('SYS')" id="filterBtnSYS" class="flex-1 py-1 rounded-lg text-mono-400 hover:text-mono-100 transition">Sistem</button>
+            </div>
+
+            <!-- Scrollable Log History Stream -->
+            <div id="logConsole" class="flex-1 bg-mono-900/50 rounded-2xl p-3 font-mono text-[11px] overflow-y-auto space-y-2 border border-mono-800/80 leading-relaxed select-text min-h-[220px]">
+                <div class="text-mono-500 italic text-center py-4">[ABDURRAHMAN] System Ready. Waiting for Web Bluetooth or Simulation data...</div>
+            </div>
+
+            <!-- Panel Actions Footer -->
+            <div class="pt-3 border-t border-mono-800/80 flex gap-2 shrink-0 mt-3">
+                <button onclick="copyLogToClipboard()" class="flex-1 bg-mono-900 hover:bg-mono-800 text-mono-200 border border-mono-800 py-2 rounded-xl text-xs font-semibold transition flex items-center justify-center space-x-1.5">
+                    <i class="fa-regular fa-copy"></i>
+                    <span>Salin Log</span>
+                </button>
+                <button onclick="clearSystemLog()" class="bg-mono-900 hover:bg-mono-800 text-mono-200 border border-mono-800 px-3 py-2 rounded-xl text-xs transition" title="Bersihkan">
+                    <i class="fa-solid fa-trash-can"></i>
+                </button>
+            </div>
+
+        </aside>
+
+    </div>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+    <!-- JAVASCRIPT CORE ENGINE -->
+    <script>
+        /* Micro:bit Bluetooth UART Standard UUIDs */
+        const UART_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+        const TX_CHARACTERISTIC_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // Transmit from Micro:bit
+        const RX_CHARACTERISTIC_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e'; // Receive into Micro:bit
+
+        let bleDevice = null;
+        let gattServer = null;
+        let rxCharacteristic = null;
+        let isConnected = false;
+        let isSimulating = false;
+        let simulationTimer = null;
+
+        /* Pointer Capture Press State Tracking (Fixes Hover Bug) */
+        const activePressedPointers = new Map();
+        const activeDirectionStates = { up: false, down: false, left: false, right: false, stop: false };
+        const activeKeyboardKeys = {};
+
+        /* Logs Store */
+        const logEntries = [];
+        let currentLogFilter = 'ALL';
+
+        /* Telemetry Data State */
+        const telemetry = {
+            temp: 26, minTemp: 26, maxTemp: 26,
+            light: 128, accelX: 0, accelY: 0, accelZ: -1024
+        };
+
+        /* ========== TEACHABLE MACHINE STATE ========== */
+        let tmModel = null;
+        let tmWebcam = null;
+        let tmMaxPredictions = 0;
+        let tmIsRunning = false;
+        let tmLastSentClass = null;          // class yang terakhir dikirim (dipertahankan jika conf < 85%)
+        let tmAnimFrameId = null;
+        const TM_CONFIDENCE_THRESHOLD = 0.85;
+
+        /* Pointer Events logic ensuring hover without clicking sends ZERO signals */
+        function handleDpadPointerDown(event, direction) {
+            event.preventDefault();
+            const element = event.currentTarget;
+
+            try {
+                element.setPointerCapture(event.pointerId);
+            } catch (e) {}
+
+            activePressedPointers.set(event.pointerId, direction);
+            activeDirectionStates[direction] = true;
+            element.classList.add('active');
+
+            sendUARTCommand(direction);
+            updateSignalMonitorDisplay(direction, true);
+        }
+
+        function handleDpadPointerUp(event, direction) {
+            event.preventDefault();
+            const element = event.currentTarget;
+
+            try {
+                if (element.hasPointerCapture && element.hasPointerCapture(event.pointerId)) {
+                    element.releasePointerCapture(event.pointerId);
+                }
+            } catch (e) {}
+
+            const wasPressed = activePressedPointers.has(event.pointerId) || activeDirectionStates[direction];
+
+            if (wasPressed) {
+                activePressedPointers.delete(event.pointerId);
+                activeDirectionStates[direction] = false;
+                element.classList.remove('active');
+
+                // Send stop ONLY when an actively pressed button is released
+                sendUARTCommand('stop');
+                updateSignalMonitorDisplay('stop', false);
+            }
+        }
+
+        function handleDpadPointerCancel(event, direction) {
+            handleDpadPointerUp(event, direction);
+        }
+
+        function updateSignalMonitorDisplay(command, isActive) {
+            const displayEl = document.getElementById('activeSignalDisplay');
+            if (!displayEl) return;
+
+            if (isActive && command !== 'stop') {
+                displayEl.textContent = `TRANSMIT: '${command.toUpperCase()}'`;
+                displayEl.className = 'font-mono text-xs font-bold text-mono-black bg-mono-white px-2.5 py-0.5 rounded-lg shadow-[0_0_10px_rgba(255,255,255,0.5)]';
+            } else {
+                displayEl.textContent = 'IDLE (stop)';
+                displayEl.className = 'font-mono text-xs font-bold text-mono-400 bg-mono-950 px-2.5 py-0.5 rounded-lg border border-mono-800';
+            }
+        }
+
+        /* Keyboard listener */
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+            const key = e.code;
+            if (activeKeyboardKeys[key]) return;
+
+            let dir = null;
+            let btnId = null;
+
+            if (key === 'KeyW' || key === 'ArrowUp') { dir = 'up'; btnId = 'btnDpadUp'; }
+            else if (key === 'KeyS' || key === 'ArrowDown') { dir = 'down'; btnId = 'btnDpadDown'; }
+            else if (key === 'KeyA' || key === 'ArrowLeft') { dir = 'left'; btnId = 'btnDpadLeft'; }
+            else if (key === 'KeyD' || key === 'ArrowRight') { dir = 'right'; btnId = 'btnDpadRight'; }
+            else if (key === 'Space') { dir = 'stop'; btnId = 'btnDpadCenter'; }
+
+            if (dir) {
+                e.preventDefault();
+                activeKeyboardKeys[key] = true;
+                const btn = document.getElementById(btnId);
+                if (btn) btn.classList.add('active');
+                sendUARTCommand(dir);
+                updateSignalMonitorDisplay(dir, true);
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const key = e.code;
+            if (!activeKeyboardKeys[key]) return;
+
+            let dir = null;
+            let btnId = null;
+
+            if (key === 'KeyW' || key === 'ArrowUp') { dir = 'up'; btnId = 'btnDpadUp'; }
+            else if (key === 'KeyS' || key === 'ArrowDown') { dir = 'down'; btnId = 'btnDpadDown'; }
+            else if (key === 'KeyA' || key === 'ArrowLeft') { dir = 'left'; btnId = 'btnDpadLeft'; }
+            else if (key === 'KeyD' || key === 'ArrowRight') { dir = 'right'; btnId = 'btnDpadRight'; }
+            else if (key === 'Space') { dir = 'stop'; btnId = 'btnDpadCenter'; }
+
+            if (dir) {
+                e.preventDefault();
+                delete activeKeyboardKeys[key];
+                const btn = document.getElementById(btnId);
+                if (btn) btn.classList.remove('active');
+                sendUARTCommand('stop');
+                updateSignalMonitorDisplay('stop', false);
+            }
+        });
+
+        /* Web Bluetooth Connection Engine */
+        async function toggleBluetoothConnection() {
+            if (isConnected) {
+                disconnectBluetooth();
+            } else {
+                await connectBluetooth();
+            }
+        }
+
+        async function connectBluetooth() {
+            if (!navigator.bluetooth) {
+                showToast('Web Bluetooth API tidak didukung browser ini.', 'error');
+                addLogEntry('ERROR', 'Web Bluetooth API tidak didukung di browser ini.');
+                return;
+            }
+
+            try {
+                addLogEntry('SYS', 'Mencari perangkat Micro:bit Bluetooth...');
+                
+                bleDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'BBC micro:bit' }],
+                    optionalServices: [UART_SERVICE_UUID]
+                });
+
+                bleDevice.addEventListener('gattserverdisconnected', onDeviceDisconnected);
+
+                addLogEntry('SYS', `Menghubungkan ke ${bleDevice.name}...`);
+                gattServer = await bleDevice.gatt.connect();
+
+                const service = await gattServer.getPrimaryService(UART_SERVICE_UUID);
+
+                // Setup TX Notification Characteristic
+                const txChar = await service.getCharacteristic(TX_CHARACTERISTIC_UUID);
+                await txChar.startNotifications();
+                txChar.addEventListener('characteristicvaluechanged', handleIncomingUARTData);
+
+                // Setup RX Characteristic
+                rxCharacteristic = await service.getCharacteristic(RX_CHARACTERISTIC_UUID);
+
+                isConnected = true;
+                if (isSimulating) toggleSimulation(false);
+
+                updateConnectionUI(true, bleDevice.name);
+                addLogEntry('SYS', `Terhubung ke ${bleDevice.name}`);
+                showToast(`Terhubung ke ${bleDevice.name}`, 'success');
+
+            } catch (error) {
+                addLogEntry('ERROR', `Gagal koneksi: ${error.message}`);
+                showToast(`Gagal koneksi: ${error.message}`, 'error');
+                updateConnectionUI(false);
+            }
+        }
+
+        function disconnectBluetooth() {
+            if (bleDevice && bleDevice.gatt.connected) {
+                bleDevice.gatt.disconnect();
+            } else {
+                onDeviceDisconnected();
+            }
+        }
+
+        function onDeviceDisconnected() {
+            isConnected = false;
+            rxCharacteristic = null;
+            updateConnectionUI(false);
+            addLogEntry('SYS', 'Koneksi terputus.');
+            showToast('Micro:bit terputus', 'info');
+        }
+
+        function updateConnectionUI(connected, name = '') {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            const btnText = document.getElementById('connectBtnText');
+
+            if (connected) {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-mono-white glow-pulse-white';
+                text.textContent = name || 'Terhubung';
+                text.className = 'text-mono-white font-mono text-[11px] font-bold';
+                btnText.textContent = 'Putuskan Koneksi';
+            } else if (isSimulating) {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-mono-300 glow-pulse-white';
+                text.textContent = 'Simulasi Active';
+                text.className = 'text-mono-300 font-mono text-[11px]';
+                btnText.textContent = 'Hubungkan Micro:bit';
+            } else {
+                dot.className = 'w-2.5 h-2.5 rounded-full bg-mono-600';
+                text.textContent = 'Terputus';
+                text.className = 'text-mono-400 font-mono text-[11px]';
+                btnText.textContent = 'Hubungkan Micro:bit';
+            }
+        }
+
+        /* Sending UART Messages */
+        async function sendUARTCommand(commandStr) {
+            const payload = commandStr.endsWith('\n') ? commandStr : commandStr + '\n';
+            addLogEntry('TX', commandStr);
+
+            if (isConnected && rxCharacteristic) {
+                try {
+                    const encoder = new TextEncoder();
+                    await rxCharacteristic.writeValue(encoder.encode(payload));
+                } catch (err) {
+                    addLogEntry('ERROR', `TX Error: ${err.message}`);
+                }
+            } else if (isSimulating) {
+                simulateMicrobitResponse(commandStr);
+            }
+        }
+
+        function sendCustomCommand(e) {
+            e.preventDefault();
+            const input = document.getElementById('customCmdInput');
+            const val = input.value.trim();
+            if (val) {
+                sendUARTCommand(val);
+                input.value = '';
+            }
+        }
+
+        function sendDirectUART(cmd) {
+            sendUARTCommand(cmd);
+        }
+
+        function handleIncomingUARTData(event) {
+            const decoder = new TextDecoder('utf-8');
+            const rawData = decoder.decode(event.target.value);
+            parseAndProcessTelemetry(rawData);
+        }
+
+        function parseAndProcessTelemetry(dataStr) {
+            const cleanStr = dataStr.trim();
+            addLogEntry('RX', cleanStr);
+
+            if (cleanStr.startsWith('T:')) {
+                const val = parseFloat(cleanStr.substring(2));
+                if (!isNaN(val)) updateTempUI(val);
+            } else if (cleanStr.startsWith('L:')) {
+                const val = parseInt(cleanStr.substring(2));
+                if (!isNaN(val)) updateLightUI(val);
+            } else if (cleanStr.startsWith('ACC:')) {
+                const parts = cleanStr.substring(4).split(',');
+                if (parts.length === 3) updateAccelUI(parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]));
+            } else if (cleanStr.startsWith('BTN:')) {
+                if (cleanStr.includes('A=1')) updateButtonUI('A', true);
+                if (cleanStr.includes('A=0')) updateButtonUI('A', false);
+                if (cleanStr.includes('B=1')) updateButtonUI('B', true);
+                if (cleanStr.includes('B=0')) updateButtonUI('B', false);
+            }
+        }
+
+        /* Simulation Generator Mode */
+        function toggleSimulation(enable) {
+            isSimulating = enable;
+            const simCheckbox = document.getElementById('simToggle');
+            if (simCheckbox) simCheckbox.checked = enable;
+
+            if (enable) {
+                if (isConnected) disconnectBluetooth();
+                updateConnectionUI(false);
+                addLogEntry('SYS', 'Mode simulasi diaktifkan.');
+                showToast('Simulasi Aktif', 'info');
+
+                simulationTimer = setInterval(() => {
+                    const simTemp = (25.0 + Math.random() * 2.5).toFixed(1);
+                    updateTempUI(parseFloat(simTemp));
+                    updateLightUI(Math.floor(100 + Math.random() * 50));
+                    updateAccelUI(
+                        Math.floor((Math.random() - 0.5) * 200),
+                        Math.floor((Math.random() - 0.5) * 200),
+                        -1024 + Math.floor((Math.random() - 0.5) * 40)
+                    );
+                }, 2000);
+            } else {
+                if (simulationTimer) clearInterval(simulationTimer);
+                addLogEntry('SYS', 'Mode simulasi dinonaktifkan.');
+                updateConnectionUI(false);
+            }
+        }
+
+        function simulateMicrobitResponse(cmd) {
+            if (cmd === 'SMILE' || cmd === 'HEART' || cmd === 'CLEAR') {
+                triggerMatrixPreset(cmd);
+            }
+        }
+
+        /* Telemetry Helper Updates */
+        function updateTempUI(val) {
+            telemetry.temp = val;
+            if (val < telemetry.minTemp) telemetry.minTemp = val;
+            if (val > telemetry.maxTemp) telemetry.maxTemp = val;
+
+            document.getElementById('valTemp').innerHTML = `${val.toFixed(1)} <span class="text-sm font-normal text-mono-400">°C</span>`;
+            document.getElementById('minTemp').textContent = telemetry.minTemp.toFixed(1);
+            document.getElementById('maxTemp').textContent = telemetry.maxTemp.toFixed(1);
+
+            const pct = Math.min(Math.max(((val - 0) / 50) * 100, 0), 100);
+            document.getElementById('barTemp').style.width = `${pct}%`;
+        }
+
+        function updateLightUI(val) {
+            telemetry.light = val;
+            document.getElementById('valLight').innerHTML = `${val} <span class="text-xs font-normal text-mono-400">/ 255</span>`;
+            const pct = Math.min(Math.max((val / 255) * 100, 0), 100);
+            document.getElementById('barLight').style.width = `${pct}%`;
+        }
+
+        function updateAccelUI(x, y, z) {
+            document.getElementById('valAccelX').textContent = x;
+            document.getElementById('valAccelY').textContent = y;
+            document.getElementById('valAccelZ').textContent = z;
+
+            const clampX = Math.max(Math.min(x / 20, 35), -35);
+            const clampY = Math.max(Math.min(y / 20, 10), -10);
+            document.getElementById('tiltBubble').style.transform = `translate(${clampX}px, ${clampY}px)`;
+        }
+
+        function updateButtonUI(btn, isPressed) {
+            const el = document.getElementById(btn === 'A' ? 'btnAStatus' : 'btnBStatus');
+            if (el) {
+                if (isPressed) {
+                    el.textContent = 'PRESSED';
+                    el.className = 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-mono-white text-mono-black';
+                } else {
+                    el.textContent = 'RELEASE';
+                    el.className = 'px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-mono-800 text-mono-400';
+                }
+            }
+        }
+
+        function resetTelemetryData() {
+            telemetry.minTemp = telemetry.temp;
+            telemetry.maxTemp = telemetry.temp;
+            updateTempUI(telemetry.temp);
+            showToast('Statistik telemetri di-reset', 'info');
+        }
+
+        function updateSpeed(val) {
+            document.getElementById('speedValText').textContent = `${val}%`;
+            sendUARTCommand(`spd_${val}`);
+        }
+
+        /* 5x5 LED Matrix Display Helper */
+        function initMatrixDisplay() {
+            const container = document.getElementById('ledMatrixDisplay');
+            container.innerHTML = '';
+            for (let i = 0; i < 25; i++) {
+                const pixel = document.createElement('div');
+                pixel.className = 'led-pixel';
+                pixel.id = `led_${i}`;
+                container.appendChild(pixel);
+            }
+        }
+
+        function triggerMatrixPreset(preset) {
+            initMatrixDisplay();
+            let pattern = [];
+            
+            if (preset === 'SMILE') {
+                pattern = [1,3, 6,8, 17, 21,22,23];
+            } else if (preset === 'HEART') {
+                pattern = [1,3, 5,6,7,8,9, 10,11,12,13,14, 16,17,18, 22];
+            } else if (preset === 'CLEAR') {
+                pattern = [];
+            }
+
+            pattern.forEach(idx => {
+                const pixel = document.getElementById(`led_${idx}`);
+                if (pixel) pixel.classList.add('on');
+            });
+
+            sendDirectUART(preset);
+        }
+
+        /* Tab Switch Logic */
+        function switchTab(tabName) {
+            // Jika pengguna berpindah dari tab teachable ke tab lain, matikan kamera & pengiriman Teachable Machine
+            if (tabName !== 'teachable' && tmIsRunning) {
+                stopTeachableMachine();
+            }
+
+            const teleView = document.getElementById('viewTelemetry');
+            const dpadView = document.getElementById('viewDpad');
+            const teachView = document.getElementById('viewTeachable');
+            const teleBtn = document.getElementById('navTabTelemetry');
+            const dpadBtn = document.getElementById('navTabDpad');
+            const teachBtn = document.getElementById('navTabTeachable');
+
+            // Reset all
+            teleView.classList.add('hidden');
+            dpadView.classList.add('hidden');
+            teachView.classList.add('hidden');
+
+            teleBtn.className = 'nav-btn flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl font-semibold text-xs transition text-mono-400 hover:bg-mono-900 hover:text-mono-100 border border-transparent';
+            dpadBtn.className = 'nav-btn flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl font-semibold text-xs transition text-mono-400 hover:bg-mono-900 hover:text-mono-100 border border-transparent';
+            teachBtn.className = 'nav-btn flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl font-semibold text-xs transition text-mono-400 hover:bg-mono-900 hover:text-mono-100 border border-transparent';
+
+            if (tabName === 'telemetry') {
+                teleView.classList.remove('hidden');
+                teleBtn.className = 'nav-btn flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl font-semibold text-xs transition bg-mono-white text-mono-black border border-mono-white shadow-md';
+            } else if (tabName === 'dpad') {
+                dpadView.classList.remove('hidden');
+                dpadBtn.className = 'nav-btn flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl font-semibold text-xs transition bg-mono-white text-mono-black border border-mono-white shadow-md';
+            } else if (tabName === 'teachable') {
+                teachView.classList.remove('hidden');
+                teachBtn.className = 'nav-btn flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl font-semibold text-xs transition bg-mono-white text-mono-black border border-mono-white shadow-md';
+            }
+        }
+
+        /* ========== TEACHABLE MACHINE FUNCTIONS ========== */
+        async function startTeachableMachine() {
+            let url = document.getElementById('tmModelUrl').value.trim();
+            if (!url) {
+                showToast('Masukkan link model Teachable Machine terlebih dahulu', 'error');
+                return;
+            }
+
+            // Pastikan URL berakhir dengan /
+            if (!url.endsWith('/')) url += '/';
+
+            const modelURL = url + 'model.json';
+            const metadataURL = url + 'metadata.json';
+
+            try {
+                document.getElementById('tmStatusBadge').textContent = 'Loading...';
+                document.getElementById('tmStatusBadge').className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-mono-800 border border-mono-700 text-mono-200';
+                document.getElementById('tmLoadBtn').disabled = true;
+                addLogEntry('SYS', `Loading Teachable Machine model: ${url}`);
+
+                // Load model
+                tmModel = await tmImage.load(modelURL, metadataURL);
+                tmMaxPredictions = tmModel.getTotalClasses();
+
+                // Setup webcam
+                const flip = true;
+                tmWebcam = new tmImage.Webcam(240, 240, flip);
+                await tmWebcam.setup(); // request camera permission
+                await tmWebcam.play();
+
+                // Clear placeholder & append canvas
+                const container = document.getElementById('webcam-container');
+                container.innerHTML = '';
+                container.appendChild(tmWebcam.canvas);
+
+                // Build label UI
+                const labelContainer = document.getElementById('tmLabelContainer');
+                labelContainer.innerHTML = '';
+                for (let i = 0; i < tmMaxPredictions; i++) {
+                    const row = document.createElement('div');
+                    row.className = 'space-y-1';
+                    row.innerHTML = `
+                        <div class="flex justify-between text-[11px]">
+                            <span class="font-mono text-mono-300" id="tmClassName_${i}">—</span>
+                            <span class="font-mono text-mono-400" id="tmClassProb_${i}">0%</span>
+                        </div>
+                        <div class="w-full bg-mono-950 rounded-full h-1.5 overflow-hidden border border-mono-800">
+                            <div id="tmClassBar_${i}" class="bg-mono-white h-1.5 rounded-full transition-all duration-150" style="width: 0%"></div>
+                        </div>
+                    `;
+                    labelContainer.appendChild(row);
+                }
+
+                tmIsRunning = true;
+                document.getElementById('tmStopBtn').disabled = false;
+                document.getElementById('tmStatusBadge').textContent = 'Running';
+                document.getElementById('tmStatusBadge').className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-mono-white text-mono-black font-bold';
+
+                addLogEntry('SYS', `Model loaded. Classes: ${tmMaxPredictions}. Webcam started.`);
+                showToast('Teachable Machine aktif!', 'success');
+
+                // Start prediction loop
+                window.requestAnimationFrame(tmLoop);
+
+            } catch (err) {
+                console.error(err);
+                addLogEntry('ERROR', `Gagal load model: ${err.message}`);
+                showToast(`Gagal load model: ${err.message}`, 'error');
+                document.getElementById('tmStatusBadge').textContent = 'Error';
+                document.getElementById('tmStatusBadge').className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-mono-800 border border-mono-700 text-mono-300';
+                document.getElementById('tmLoadBtn').disabled = false;
+            }
+        }
+
+        async function tmLoop() {
+            if (!tmIsRunning) return;
+
+            tmWebcam.update();
+            await tmPredict();
+            tmAnimFrameId = window.requestAnimationFrame(tmLoop);
+        }
+
+        async function tmPredict() {
+            if (!tmModel || !tmWebcam) return;
+
+            const prediction = await tmModel.predict(tmWebcam.canvas);
+
+            let bestClass = null;
+            let bestProb = 0;
+
+            for (let i = 0; i < tmMaxPredictions; i++) {
+                const p = prediction[i];
+                const pct = (p.probability * 100).toFixed(1);
+
+                const nameEl = document.getElementById(`tmClassName_${i}`);
+                const probEl = document.getElementById(`tmClassProb_${i}`);
+                const barEl = document.getElementById(`tmClassBar_${i}`);
+
+                if (nameEl) nameEl.textContent = p.className;
+                if (probEl) probEl.textContent = pct + '%';
+                if (barEl) {
+                    barEl.style.width = (p.probability * 100) + '%';
+                    // Highlight the highest one
+                    if (p.probability > bestProb) {
+                        bestProb = p.probability;
+                        bestClass = p.className;
+                    }
+                }
+            }
+
+            // Highlight highest bar
+            for (let i = 0; i < tmMaxPredictions; i++) {
+                const barEl = document.getElementById(`tmClassBar_${i}`);
+                if (barEl) {
+                    if (prediction[i].className === bestClass) {
+                        barEl.className = 'bg-mono-white h-1.5 rounded-full transition-all duration-150';
+                    } else {
+                        barEl.className = 'bg-mono-600 h-1.5 rounded-full transition-all duration-150';
+                    }
+                }
+            }
+
+            document.getElementById('tmCurrentConf').textContent = bestClass 
+                ? `${bestClass} (${(bestProb * 100).toFixed(1)}%)` 
+                : '—';
+
+            // === LOGIKA UTAMA: Hanya kirim jika ≥ 85% ===
+            if (bestClass && bestProb >= TM_CONFIDENCE_THRESHOLD) {
+                // Hanya kirim jika class berubah dari yang terakhir dikirim
+                if (bestClass !== tmLastSentClass) {
+                    tmLastSentClass = bestClass;
+                    sendUARTCommand(bestClass);
+                    document.getElementById('tmLastSentDisplay').textContent = bestClass;
+                    document.getElementById('tmLastSentDisplay').className = 'font-mono text-xs font-bold text-mono-black bg-mono-white px-2.5 py-0.5 rounded-lg shadow-[0_0_8px_rgba(255,255,255,0.4)]';
+                }
+            }
+            // Jika < 85% → biarkan tmLastSentClass tetap (tidak diubah, tidak dikirim ulang, dan tetap berada di data sebelumnya)
+        }
+
+        function stopTeachableMachine() {
+            tmIsRunning = false;
+            if (tmAnimFrameId) {
+                cancelAnimationFrame(tmAnimFrameId);
+                tmAnimFrameId = null;
+            }
+            if (tmWebcam) {
+                tmWebcam.stop();
+                tmWebcam = null;
+            }
+            tmModel = null;
+
+            document.getElementById('webcam-container').innerHTML = `
+                <div id="tmPlaceholder" class="text-center text-mono-600 text-xs py-10">
+                    <i class="fa-solid fa-camera text-2xl mb-2 opacity-40"></i>
+                    <p>Kamera akan muncul setelah model dimuat</p>
+                </div>`;
+            document.getElementById('tmLabelContainer').innerHTML = `<div class="text-mono-600 text-xs italic text-center py-8">Menunggu model...</div>`;
+            document.getElementById('tmStatusBadge').textContent = 'Idle';
+            document.getElementById('tmStatusBadge').className = 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-mono-950 border border-mono-800 text-mono-500';
+            document.getElementById('tmLoadBtn').disabled = false;
+            document.getElementById('tmStopBtn').disabled = true;
+            document.getElementById('tmCurrentConf').textContent = '—';
+
+            addLogEntry('SYS', 'Teachable Machine dihentikan.');
+            showToast('Teachable Machine dihentikan', 'info');
+        }
+
+        /* Activity History System Logs */
+        function addLogEntry(type, message) {
+            const time = new Date().toLocaleTimeString('id-ID', { hour12: false });
+            logEntries.push({ time, type, message });
+            if (logEntries.length > 250) logEntries.shift();
+            renderLogConsole();
+        }
+
+        function setLogFilter(filterType) {
+            currentLogFilter = filterType;
+            ['ALL', 'TX', 'RX', 'SYS'].forEach(f => {
+                const btn = document.getElementById(`filterBtn${f}`);
+                if (btn) {
+                    if (f === filterType) {
+                        btn.className = 'flex-1 py-1 rounded-lg font-bold bg-mono-white text-mono-black transition';
+                    } else {
+                        btn.className = 'flex-1 py-1 rounded-lg text-mono-400 hover:text-mono-100 transition';
+                    }
+                }
+            });
+            renderLogConsole();
+        }
+
+        function renderLogConsole() {
+            const consoleEl = document.getElementById('logConsole');
+            const badgeEl = document.getElementById('logCounterBadge');
+            if (!consoleEl) return;
+
+            const filtered = logEntries.filter(e => currentLogFilter === 'ALL' || e.type === currentLogFilter);
+            badgeEl.textContent = `${filtered.length} log`;
+
+            consoleEl.innerHTML = filtered.map(e => {
+                let tagColor = 'text-mono-300';
+                let tag = `[${e.type}]`;
+
+                if (e.type === 'TX') {
+                    tagColor = 'text-mono-white font-bold';
+                    tag = '[TX ➔]';
+                } else if (e.type === 'RX') {
+                    tagColor = 'text-mono-300';
+                    tag = '[RX ⬅]';
+                } else if (e.type === 'SYS') {
+                    tagColor = 'text-mono-400';
+                    tag = '[SYS]';
+                } else if (e.type === 'ERROR') {
+                    tagColor = 'text-mono-100 underline';
+                    tag = '[ERR]';
+                }
+
+                return `<div class="flex items-start space-x-1.5 leading-snug"><span class="text-mono-600 select-none">${e.time}</span><span class="${tagColor}">${tag}</span><span class="text-mono-200">${escapeHtml(e.message)}</span></div>`;
+            }).join('');
+
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        function clearSystemLog() {
+            logEntries.length = 0;
+            renderLogConsole();
+            showToast('Activity log dibersihkan', 'info');
+        }
+
+        function copyLogToClipboard() {
+            const textToCopy = logEntries.map(e => `[${e.time}] [${e.type}] ${e.message}`).join('\n');
+            const dummy = document.createElement('textarea');
+            document.body.appendChild(dummy);
+            dummy.value = textToCopy;
+            dummy.select();
+            document.execCommand('copy');
+            document.body.removeChild(dummy);
+            showToast('Log disalin ke clipboard!', 'success');
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'animate-toast flex items-center space-x-2.5 bg-mono-900 border border-mono-700 text-mono-100 text-xs px-4 py-2.5 rounded-xl shadow-2xl pointer-events-auto';
+            toast.innerHTML = `<i class="fa-solid fa-circle-info text-mono-white text-sm"></i><span>${escapeHtml(message)}</span>`;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.25s ease';
+                setTimeout(() => toast.remove(), 250);
+            }, 2500);
+        }
+
+        // On Load initialization
+        window.onload = function() {
+            initMatrixDisplay();
+            renderLogConsole();
+            addLogEntry('SYS', 'Aplikasi "Abdurrahman" aktif. D-Pad pointer capture siap.');
+            addLogEntry('SYS', 'Teachable Machine siap. Paste link model lalu klik Load & Start.');
+        };
+    </script>
+</body>
+</html>
